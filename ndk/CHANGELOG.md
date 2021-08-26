@@ -1,5 +1,7 @@
 # Unreleased
 
+- ndk/native_window: Use `release`/`acquire` for `Drop` and `Clone` respectively
+
 # 0.5.0 (2021-11-22)
 
 - **Breaking:** Replace `add_fd_with_callback` `ident` with constant value `ALOOPER_POLL_CALLBACK`,
