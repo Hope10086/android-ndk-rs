@@ -6,6 +6,7 @@ while read ARCH && read TARGET ; do
         --blocklist-item 'C?_?JNIEnv' \
         --blocklist-item '_?JavaVM' \
         --blocklist-item '_?j\w+' \
+        --newtype-enum '\w+_(result|status)_t' \
         -- \
         --sysroot="${ANDROID_NDK_ROOT}"/toolchains/llvm/prebuilt/linux-x86_64/sysroot/ --target=$TARGET
 done << EOF
