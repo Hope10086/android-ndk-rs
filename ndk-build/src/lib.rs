@@ -18,6 +18,16 @@ macro_rules! bat {
     }};
 }
 
+macro_rules! cmd {
+    ($cmd:expr) => {{
+        #[cfg(not(target_os = "windows"))]
+        let cmd = $cmd;
+        #[cfg(target_os = "windows")]
+        let cmd = concat!($cmd, ".cmd");
+        cmd
+    }};
+}
+
 pub mod apk;
 pub mod cargo;
 pub mod dylibs;

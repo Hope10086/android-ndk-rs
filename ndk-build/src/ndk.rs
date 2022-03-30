@@ -190,11 +190,11 @@ impl Ndk {
         Ok(android_jar)
     }
 
-    pub fn toolchain_dir(&self) -> Result<PathBuf, NdkError> {
+    fn host_arch() -> Result<&'static str, NdkError> {
         let host_os = std::env::var("HOST").ok();
         let host_contains = |s| host_os.as_ref().map(|h| h.contains(s)).unwrap_or(false);
 
-        let arch = if host_contains("linux") {
+        Ok(if host_contains("linux") {
             "linux"
         } else if host_contains("macos") {
             "darwin"
@@ -211,8 +211,11 @@ impl Ndk {
                 Some(host_os) => Err(NdkError::UnsupportedHost(host_os)),
                 _ => Err(NdkError::UnsupportedTarget),
             };
-        };
+        })
+    }
 
+    pub fn toolchain_dir(&self) -> Result<PathBuf, NdkError> {
+        let arch = Self::host_arch()?;
         let mut toolchain_dir = self
             .ndk_path
             .join("toolchains")
@@ -279,6 +282,35 @@ impl Ndk {
                     llvm_bin,
                 })
         }
+    }
+
+    pub fn prebuilt_dir(&self) -> Result<PathBuf, NdkError> {
+        let arch = Self::host_arch()?;
+        let /* mut */ prebuilt_dir = self
+            .ndk_path
+            .join("prebuilt")
+            .join(format!("{}-x86_64", arch));
+        // if !toolchain_dir.exists() {
+        //     toolchain_dir.set_file_name(arch);
+        // }
+        if !prebuilt_dir.exists() {
+            return Err(NdkError::PathNotFound(prebuilt_dir));
+        }
+        Ok(prebuilt_dir)
+    }
+
+    pub fn ndk_gdb(&self, launch_dir: impl AsRef<Path>) -> Result<(), NdkError> {
+        let abi = self.detect_abi()?;
+        let jni_dir = launch_dir.as_ref().join("jni");
+        std::fs::create_dir_all(&jni_dir)?;
+        std::fs::write(
+            jni_dir.join("Android.mk"),
+            format!("APP_ABI=\"{}\"\nTARGET_OUT=\"\"\n", abi.android_abi()),
+        )?;
+        Command::new(self.prebuilt_dir()?.join("bin").join(cmd!("ndk-gdb")))
+            .current_dir(launch_dir.as_ref())
+            .status()?;
+        Ok(())
     }
 
     pub fn android_dir(&self) -> Result<PathBuf, NdkError> {
@@ -378,7 +410,7 @@ impl Ndk {
 
     pub fn detect_abi(&self) -> Result<Target, NdkError> {
         let stdout = self
-            .platform_tool("adb")?
+            .platform_tool(bin!("adb"))?
             .arg("shell")
             .arg("getprop")
             .arg("ro.product.cpu.abi")

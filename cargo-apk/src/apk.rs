@@ -9,7 +9,6 @@ use ndk_build::manifest::{IntentFilter, MetaData};
 use ndk_build::ndk::Ndk;
 use ndk_build::target::Target;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub struct ApkBuilder<'a> {
     cmd: &'a Subcommand,
@@ -233,17 +232,8 @@ impl<'a> ApkBuilder<'a> {
 
     pub fn gdb(&self, artifact: &Artifact) -> Result<(), Error> {
         self.run(artifact)?;
-        let abi = self.ndk.detect_abi()?;
         let target_dir = self.build_dir.join(artifact);
-        let jni_dir = target_dir.join("jni");
-        std::fs::create_dir_all(&jni_dir)?;
-        std::fs::write(
-            jni_dir.join("Android.mk"),
-            format!("APP_ABI=\"{}\"\nTARGET_OUT=\"\"\n", abi.android_abi()),
-        )?;
-        Command::new(self.ndk.ndk().join("ndk-gdb"))
-            .current_dir(target_dir)
-            .status()?;
+        self.ndk.ndk_gdb(&target_dir)?;
         Ok(())
     }
 
