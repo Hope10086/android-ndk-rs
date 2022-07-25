@@ -51,7 +51,7 @@ impl Ndk {
             .filter_map(|path| path.ok())
             .filter(|path| path.path().is_dir())
             .filter_map(|path| path.file_name().into_string().ok())
-            .filter(|name| name.chars().next().unwrap().is_digit(10))
+            .filter(|name| name.chars().next().unwrap().is_ascii_digit())
             .max()
             .ok_or(NdkError::BuildToolsNotFound)?;
 
@@ -228,21 +228,21 @@ impl Ndk {
         Ok(toolchain_dir)
     }
 
-    pub fn clang(&self, target: Target, platform: u32) -> Result<(PathBuf, PathBuf), NdkError> {
-        #[cfg(target_os = "windows")]
-        let ext = ".cmd";
-        #[cfg(not(target_os = "windows"))]
-        let ext = "";
+    pub fn clang(&self) -> Result<(PathBuf, PathBuf), NdkError> {
+        let ext = if cfg!(target_os = "windows") {
+            "exe"
+        } else {
+            ""
+        };
 
-        let bin_name = format!("{}{}-clang", target.ndk_llvm_triple(), platform);
         let bin_path = self.toolchain_dir()?.join("bin");
 
-        let clang = bin_path.join(format!("{}{}", &bin_name, ext));
+        let clang = bin_path.join("clang").with_extension(ext);
         if !clang.exists() {
             return Err(NdkError::PathNotFound(clang));
         }
 
-        let clang_pp = bin_path.join(format!("{}++{}", &bin_name, ext));
+        let clang_pp = bin_path.join("clang++").with_extension(ext);
         if !clang_pp.exists() {
             return Err(NdkError::PathNotFound(clang_pp));
         }
@@ -251,10 +251,11 @@ impl Ndk {
     }
 
     pub fn toolchain_bin(&self, name: &str, target: Target) -> Result<PathBuf, NdkError> {
-        #[cfg(target_os = "windows")]
-        let ext = ".exe";
-        #[cfg(not(target_os = "windows"))]
-        let ext = "";
+        let ext = if cfg!(target_os = "windows") {
+            ".exe"
+        } else {
+            ""
+        };
 
         let toolchain_path = self.toolchain_dir()?.join("bin");
 
@@ -313,7 +314,7 @@ impl Ndk {
                 .arg("-keystore")
                 .arg(&path)
                 .arg("-storepass")
-                .arg("android")
+                .arg(&password)
                 .arg("-alias")
                 .arg("androiddebugkey")
                 .arg("-keypass")

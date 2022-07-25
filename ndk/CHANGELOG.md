@@ -1,12 +1,27 @@
 # Unreleased
 
+# 0.7.0 (2022-07-24)
+
 - hardware_buffer: Make `HardwareBuffer::as_ptr()` public for interop with Vulkan. (#213)
-- **Breaking:** `Configuration::country()` now returns `None` when the country is unset (akin to `Configuration::language()`)
+- **Breaking:** `Configuration::country()` now returns `None` when the country is unset (akin to `Configuration::language()`). (#220)
 - Add `MediaCodec` and `MediaFormat` bindings. (#216)
-- **Breaking:** Upgrade to [`ndk-sys 0.4.0`](../ndk-sys/CHANGELOG.md#040-TODO-YET-UNRELEASED) and use new `enum` newtype wrappers. (#245)
+- **Breaking:** Upgrade to [`ndk-sys 0.4.0`](../ndk-sys/CHANGELOG.md#040-2022-07-XXXX) and use new `enum` newtype wrappers. (#245)
 - native_window: Use `release`/`acquire` for `Drop` and `Clone` respectively. (#207)
 - **Breaking:** audio: Rename from `aaudio` to `audio` and drop `A` prefix. (#273)
-- Implement `HasRawWindowHandle` directly on `NativeWindow` (#274)
+- Implement `HasRawWindowHandle` directly on `NativeWindow`. (#274, #319)
+- **Breaking:** native_activity: Replace `CStr` return types with `Path`. (#279)
+- native_window: Add `format()` getter and `set_buffers_geometry()` setter. (#276)
+- native_activity: Add `set_window_format()` setter. (#277)
+- native_activity: Add `set_window_flags()` to change window behavior. (#278)
+- Add `SurfaceTexture` bindings. (#267)
+- Improve library and structure documentation, linking back to the NDK docs more rigorously. (#290)
+- **Breaking:** input_queue: `get_event()` now returns a `Result` with `std::io::Error`; `InputQueueError` has been removed. (#292)
+- **Breaking:** input_queue: `has_events()` now returns a `bool` directly without being wrapped in `Result`. (#294)
+- **Breaking:** hardware_buffer: `HardwareBufferError` has been removed and replaced with `std::io::Error` in return types. (#295)
+- Fixed `HardwareBuffer` leak on buffers returned from `AndroidBitmap::get_hardware_buffer()`. (#296)
+- **Breaking:** Update `jni` crate (used in public API) from `0.18` to `0.19`. (#300)
+- hardware_buffer: Made `HardwareBufferDesc` fields `pub`. (#313)
+- **Breaking:** Remove `hardware_buffer` and `trace` features in favour of using `api-level-26` or `api-level-23` directly. (#320)
 
 # 0.6.0 (2022-01-05)
 

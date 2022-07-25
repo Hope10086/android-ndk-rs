@@ -1,3 +1,8 @@
+//! Bindings for [`AMediaFormat`] and [`AMediaCodec`]
+//!
+//! [`AMediaFormat`]: https://developer.android.com/ndk/reference/group/media#amediaformat
+//! [`AMediaCodec`]: https://developer.android.com/ndk/reference/group/media#amediacodec
+
 use super::{get_unlikely_to_be_null, NdkMediaError, Result};
 use crate::native_window::NativeWindow;
 use std::{
@@ -15,6 +20,9 @@ pub enum MediaCodecDirection {
     Encoder,
 }
 
+/// A native [`AMediaFormat *`]
+///
+/// [`AMediaFormat *`]: https://developer.android.com/ndk/reference/group/media#amediaformat
 #[derive(Debug)]
 pub struct MediaFormat {
     inner: NonNull<ffi::AMediaFormat>,
@@ -180,6 +188,9 @@ impl Drop for MediaFormat {
     }
 }
 
+/// A native [`AMediaCodec *`]
+///
+/// [`AMediaCodec *`]: https://developer.android.com/ndk/reference/group/media#amediacodec
 #[derive(Debug)]
 pub struct MediaCodec {
     inner: NonNull<ffi::AMediaCodec>,
@@ -218,17 +229,17 @@ impl MediaCodec {
     pub fn configure(
         &self,
         format: &MediaFormat,
-        surface: &NativeWindow,
+        surface: Option<&NativeWindow>,
         direction: MediaCodecDirection,
     ) -> Result<()> {
         let status = unsafe {
             ffi::AMediaCodec_configure(
                 self.as_ptr(),
                 format.as_ptr(),
-                surface.ptr().as_ptr(),
+                surface.map_or(ptr::null_mut(), |s| s.ptr().as_ptr()),
                 ptr::null_mut(),
                 if direction == MediaCodecDirection::Encoder {
-                    1
+                    ffi::AMEDIACODEC_CONFIGURE_FLAG_ENCODE as u32
                 } else {
                     0
                 },

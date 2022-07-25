@@ -113,10 +113,10 @@ pub struct Activity {
     #[serde(rename(serialize = "meta-data"))]
     #[serde(default)]
     pub meta_data: Vec<MetaData>,
-    /// If no `MAIN` action exists in any intent filter, a default `MAIN` filter is serialized.
+    /// If no `MAIN` action exists in any intent filter, a default `MAIN` filter is serialized by `cargo-apk`.
     #[serde(rename(serialize = "intent-filter"))]
     #[serde(default)]
-    pub intent_filters: Vec<IntentFilter>,
+    pub intent_filter: Vec<IntentFilter>,
 }
 
 impl Default for Activity {
@@ -130,7 +130,7 @@ impl Default for Activity {
             exported: None,
             enable_vrmode: None,
             meta_data: Default::default(),
-            intent_filters: Default::default(),
+            intent_filter: Default::default(),
         }
     }
 }

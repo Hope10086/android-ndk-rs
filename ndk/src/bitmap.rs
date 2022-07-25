@@ -1,11 +1,17 @@
+//! Bindings for [`AndroidBitmap`] functions
+//!
+//! These functions operate directly on a JNI [`android.graphics.Bitmap`] instance.
+//!
+//! [`AndroidBitmap`]: https://developer.android.com/ndk/reference/group/bitmap
+//! [`android.graphics.Bitmap`]: https://developer.android.com/reference/android/graphics/Bitmap
 #![cfg(feature = "bitmap")]
 
 use jni_sys::{jobject, JNIEnv};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::{convert::TryInto, mem::MaybeUninit, ptr::NonNull};
+use std::{convert::TryInto, mem::MaybeUninit};
 
-#[cfg(feature = "hardware_buffer")]
-use crate::hardware_buffer::HardwareBuffer;
+#[cfg(feature = "api-level-30")]
+use crate::hardware_buffer::HardwareBufferRef;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -58,6 +64,9 @@ mod temp_allow_deprecated {
 }
 pub use temp_allow_deprecated::*;
 
+/// An immediate wrapper over [`android.graphics.Bitmap`]
+///
+/// [`android.graphics.Bitmap`]: https://developer.android.com/reference/android/graphics/Bitmap
 #[derive(Debug)]
 pub struct AndroidBitmap {
     env: *mut JNIEnv,
@@ -65,10 +74,13 @@ pub struct AndroidBitmap {
 }
 
 impl AndroidBitmap {
-    /// Create an [`AndroidBitmap`] from JNI pointers
+    /// Create an [`AndroidBitmap`] wrapper from JNI pointers
     ///
     /// # Safety
-    /// By calling this function, you assert that these are valid pointers to JNI objects.
+    /// This function should be called with a healthy JVM pointer and with a non-null
+    /// [`android.graphics.Bitmap`], which must be kept alive on the Java/Kotlin side.
+    ///
+    /// [`android.graphics.Bitmap`]: https://developer.android.com/reference/android/graphics/Bitmap
     pub unsafe fn from_jni(env: *mut JNIEnv, bitmap: jobject) -> Self {
         Self { env, inner: bitmap }
     }
@@ -89,21 +101,27 @@ impl AndroidBitmap {
         BitmapError::from_status(status)
     }
 
-    #[cfg(all(feature = "hardware_buffer", feature = "api-level-30"))]
-    pub fn get_hardware_buffer(&self) -> BitmapResult<HardwareBuffer> {
+    /// Retrieve the native object associated with a `HARDWARE` [`AndroidBitmap`].
+    ///
+    /// Client must not modify it while an [`AndroidBitmap`] is wrapping it.
+    #[cfg(feature = "api-level-30")]
+    pub fn get_hardware_buffer(&self) -> BitmapResult<HardwareBufferRef> {
         unsafe {
             let result =
                 construct(|res| ffi::AndroidBitmap_getHardwareBuffer(self.env, self.inner, res))?;
             let non_null = if cfg!(debug_assertions) {
-                NonNull::new(result).expect("result should never be null")
+                std::ptr::NonNull::new(result).expect("result should never be null")
             } else {
-                NonNull::new_unchecked(result)
+                std::ptr::NonNull::new_unchecked(result)
             };
-            Ok(HardwareBuffer::from_ptr(non_null))
+            Ok(HardwareBufferRef::from_ptr(non_null))
         }
     }
 }
 
+/// A native [`AndroidBitmapInfo`]
+///
+/// [`AndroidBitmapInfo`]: https://developer.android.com/ndk/reference/struct/android-bitmap-info#struct_android_bitmap_info
 #[derive(Copy, Clone, Debug)]
 pub struct AndroidBitmapInfo {
     inner: ffi::AndroidBitmapInfo,

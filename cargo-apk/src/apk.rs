@@ -6,7 +6,7 @@ use ndk_build::cargo::{cargo_ndk, VersionCode};
 use ndk_build::dylibs::get_libs_search_paths;
 use ndk_build::error::NdkError;
 use ndk_build::manifest::{IntentFilter, MetaData};
-use ndk_build::ndk::Ndk;
+use ndk_build::ndk::{Key, Ndk};
 use ndk_build::target::Target;
 use std::path::PathBuf;
 use std::process::Command;
@@ -69,11 +69,11 @@ impl<'a> ApkBuilder<'a> {
 
         // Add a default `MAIN` action to launch the activity, if the user didn't supply it by hand.
         if activity
-            .intent_filters
+            .intent_filter
             .iter()
             .all(|i| i.actions.iter().all(|f| f != "android.intent.action.MAIN"))
         {
-            activity.intent_filters.push(IntentFilter {
+            activity.intent_filter.push(IntentFilter {
                 actions: vec!["android.intent.action.MAIN".to_string()],
                 categories: vec!["android.intent.category.LAUNCHER".to_string()],
                 data: vec![],
@@ -98,10 +98,15 @@ impl<'a> ApkBuilder<'a> {
 
     pub fn check(&self) -> Result<(), Error> {
         for target in &self.build_targets {
-            let triple = target.rust_triple();
-            let mut cargo = cargo_ndk(&self.ndk, *target, self.min_sdk_version())?;
+            let mut cargo = cargo_ndk(
+                &self.ndk,
+                *target,
+                self.min_sdk_version(),
+                self.cmd.target_dir(),
+            )?;
             cargo.arg("check");
             if self.cmd.target().is_none() {
+                let triple = target.rust_triple();
                 cargo.arg("--target").arg(triple);
             }
             cargo.args(self.cmd.args());
@@ -134,6 +139,8 @@ impl<'a> ApkBuilder<'a> {
 
         let crate_path = self.cmd.manifest().parent().expect("invalid manifest path");
 
+        let is_debug_profile = *self.cmd.profile() == Profile::Dev;
+
         let assets = self
             .manifest
             .assets
@@ -162,6 +169,7 @@ impl<'a> ApkBuilder<'a> {
             assets,
             resources,
             manifest,
+            disable_aapt_compression: is_debug_profile,
         };
         let apk = config.create_apk()?;
 
@@ -174,46 +182,17 @@ impl<'a> ApkBuilder<'a> {
                 .join(artifact)
                 .join(artifact.file_name(CrateType::Cdylib, triple));
 
-            let mut cargo = cargo_ndk(&config.ndk, *target, self.min_sdk_version())?;
+            let mut cargo = cargo_ndk(
+                &self.ndk,
+                *target,
+                self.min_sdk_version(),
+                self.cmd.target_dir(),
+            )?;
             cargo.arg("build");
             if self.cmd.target().is_none() {
                 cargo.arg("--target").arg(triple);
             }
             cargo.args(self.cmd.args());
-
-            // Workaround for https://github.com/rust-windowing/android-ndk-rs/issues/149:
-            // Rust (1.56 as of writing) still requires libgcc during linking, but this does
-            // not ship with the NDK anymore since NDK r23 beta 3.
-            // See https://github.com/rust-lang/rust/pull/85806 for a discussion on why libgcc
-            // is still required even after replacing it with libunwind in the source.
-            // XXX: Add an upper-bound on the Rust version whenever this is not necessary anymore.
-            if self.ndk.build_tag() > 7272597 {
-                let cargo_apk_link_dir = self
-                    .cmd
-                    .target_dir()
-                    .join("cargo-apk-temp-extra-link-libraries");
-                std::fs::create_dir_all(&cargo_apk_link_dir)?;
-                std::fs::write(cargo_apk_link_dir.join("libgcc.a"), "INPUT(-lunwind)")
-                    .expect("Failed to write");
-
-                // cdylibs in transitive dependencies still get built and also need this
-                // workaround linker flag, yet arguments passed to `cargo rustc` are only
-                // forwarded to the final compiler invocation rendering our workaround ineffective.
-                // The cargo page documenting this discrepancy (https://doc.rust-lang.org/cargo/commands/cargo-rustc.html)
-                // suggests to resort to RUSTFLAGS, which are updated below:
-                let mut rustflags = match std::env::var("RUSTFLAGS") {
-                    Ok(val) => val,
-                    Err(std::env::VarError::NotPresent) => "".to_string(),
-                    Err(std::env::VarError::NotUnicode(_)) => {
-                        panic!("RUSTFLAGS environment variable contains non-unicode characters")
-                    }
-                };
-                rustflags += " -L ";
-                rustflags += cargo_apk_link_dir
-                    .to_str()
-                    .expect("Target dir must be valid UTF-8");
-                cargo.env("RUSTFLAGS", rustflags);
-            }
 
             if !cargo.status()?.success() {
                 return Err(NdkError::CmdFailed(cargo).into());
@@ -235,7 +214,24 @@ impl<'a> ApkBuilder<'a> {
             }
         }
 
-        Ok(apk.align()?.sign(config.ndk.debug_key()?)?)
+        let profile_name = match self.cmd.profile() {
+            Profile::Dev => "dev",
+            Profile::Release => "release",
+            Profile::Custom(c) => c.as_str(),
+        };
+
+        let signing_key = self.manifest.signing.get(profile_name);
+
+        let signing_key = match (signing_key, is_debug_profile) {
+            (Some(signing), _) => Key {
+                path: crate_path.join(&signing.path),
+                password: signing.keystore_password.clone(),
+            },
+            (None, true) => self.ndk.debug_key()?,
+            (None, false) => return Err(Error::MissingReleaseKey(profile_name.to_owned())),
+        };
+
+        Ok(apk.align()?.sign(signing_key)?)
     }
 
     pub fn run(&self, artifact: &Artifact) -> Result<(), Error> {
@@ -262,10 +258,20 @@ impl<'a> ApkBuilder<'a> {
     }
 
     pub fn default(&self) -> Result<(), Error> {
-        let ndk = Ndk::from_env()?;
         for target in &self.build_targets {
-            let mut cargo = cargo_ndk(&ndk, *target, self.min_sdk_version())?;
+            let mut cargo = cargo_ndk(
+                &self.ndk,
+                *target,
+                self.min_sdk_version(),
+                self.cmd.target_dir(),
+            )?;
             cargo.args(self.cmd.args());
+
+            if self.cmd.target().is_none() {
+                let triple = target.rust_triple();
+                cargo.arg("--target").arg(triple);
+            }
+
             if !cargo.status()?.success() {
                 return Err(NdkError::CmdFailed(cargo).into());
             }

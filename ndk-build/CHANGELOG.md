@@ -1,5 +1,16 @@
 # Unreleased
 
+# 0.7.0 (2022-07-05)
+
+- Fix NDK r23 `-lgcc` workaround for target directories containing spaces. ([#298](https://github.com/rust-windowing/android-ndk-rs/pull/298))
+- Invoke `clang` directly instead of through the NDK's wrapper scripts. ([#306](https://github.com/rust-windowing/android-ndk-rs/pull/306))
+- **Breaking:** Rename `Activity::intent_filters` back to `Activity::intent_filter`. ([#305](https://github.com/rust-windowing/android-ndk-rs/pull/305))
+
+# 0.6.0 (2022-06-11)
+
+- **Breaking:** Provide NDK r23 `-lgcc` workaround in `cargo_ndk()` function, now requiring `target_dir` as argument. ([#286](https://github.com/rust-windowing/android-ndk-rs/pull/286))
+- **Breaking:** Add `disable_aapt_compression` field to `ApkConfig` to disable `aapt` compression. ([#283](https://github.com/rust-windowing/android-ndk-rs/pull/283))
+
 # 0.5.0 (2022-05-07)
 
 - **Breaking:** Default `target_sdk_version` to `30` or lower (instead of the highest supported SDK version by the detected NDK toolchain)
